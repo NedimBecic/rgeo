@@ -1,163 +1,125 @@
-const canvasLine = document.getElementById("ctx-line");
-const ctxLine = canvasLine.getContext("2d");
+const canvas_main = document.getElementById("ctx-mouseClick");
+const ctx_main = canvas_main.getContext("2d");
 
-const canvasRect = document.getElementById("ctx-rect");
-const ctxRect = canvasRect.getContext("2d");
+const canvas_import = document.getElementById("ctx-import");
+const ctx_import = canvas_import.getContext("2d");
 
-const canvasCircle = document.getElementById("ctx-circle");
-const ctxCircle = canvasCircle.getContext("2d");
+const btn_clearCanvas = document.getElementById("btn-clearCanvas");
+const btn_importLines = document.getElementById("btn-importLines");
+const btn_importVertices = document.getElementById("btn-importVertices");
 
-function drawNetUsingLines(ctx, m, n) {
-    const width = ctx.canvas.width;
-    const height = ctx.canvas.height;
+const vertices = []
+const import_vertices = []
+const import_lines = []
 
-    const margin = 20;
-    const dx = (width - 2 * margin) / (m - 1);
-    const dy = (height - 2 * margin) / (n - 1);
+canvas_main.addEventListener("click", function(event){
+   const rect = canvas_main.getBoundingClientRect();
 
-    ctx.strokeStyle = "red";
-    ctx.lineWidth = 1;
+   const x = event.clientX - rect.left;
+   const y = event.clientY - rect.top;
 
-    for (let i = 0; i < m; i++) {
-        for (let j = 0; j < n; j++) {
-            const x = margin + i * dx;
-            const y = margin + j * dy;
+   vertices.push({x: x, y: y});
+   drawVertex(canvas_main, ctx_main, vertices);
+});
 
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + 1, y);
-            ctx.stroke();
-        }
+function drawVertex(canvas, ctx, vertices){
+    clearCanvas(canvas, ctx);
+
+    for(const v of vertices){
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, 4, 0, 2 * Math.PI, false);
+        ctx.fill();
     }
 }
 
-function drawNetUsingRectangles(ctx, m, n) {
-    const width = ctx.canvas.width;
-    const height = ctx.canvas.height;
+function drawLines(canvas, ctx, lines) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const margin = 20;
-    const dx = (width - 2 * margin) / (m - 1);
-    const dy = (height - 2 * margin) / (n - 1);
-
-    ctx.fillStyle = "red";
-
-    for (let i = 0; i < m; i++) {
-        for (let j = 0; j < n; j++) {
-            const x = margin + i * dx;
-            const y = margin + j * dy;
-
-            ctx.fillRect(x, y, 1, 1);
-        }
+    for (const line of lines) {
+        ctx.beginPath();
+        ctx.moveTo(line.x1, line.y1);
+        ctx.lineTo(line.x2, line.y2);
+        ctx.stroke();
     }
 }
 
-function drawNetUsingCircles(ctx, m, n) {
-    const width = ctx.canvas.width;
-    const height = ctx.canvas.height;
-
-    const margin = 20;
-    const dx = (width - 2 * margin) / (m - 1);
-    const dy = (height - 2 * margin) / (n - 1);
-
-    ctx.fillStyle = "red";
-
-    for (let i = 0; i < m; i++) {
-        for (let j = 0; j < n; j++) {
-            const x = margin + i * dx;
-            const y = margin + j * dy;
-
-            ctx.beginPath();
-            ctx.arc(x, y, 0.5, 0, 2 * Math.PI);
-            ctx.fill();
-        }
-    }
+function clearCanvas(canvas, ctx){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-const canvasSquare = document.getElementById("ctx-square");
-const ctxSquare = canvasSquare.getContext("2d");
+btn_clearCanvas.addEventListener("click", function(event){
+    vertices.length = 0;
+    clearCanvas(canvas_main, ctx_main);
+});
 
-function drawLine(ctx, x1, y1, x2, y2, colour) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.strokeStyle = colour;
-    ctx.stroke();
+function importPointsFromFile(path) {
+    fetch(path)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Greska!");
+            }
+            return response.text();
+        })
+        .then(text => {
+            const rows = text.trim().split("\n");
+
+            for (const row of rows) {
+                const parts = row.trim().split(",");
+
+                if (parts.length !== 2) continue;
+
+                const x = parseFloat(parts[0]);
+                const y = parseFloat(parts[1]);
+
+                if (isNaN(x) || isNaN(y)) continue;
+
+                import_vertices.push({ x: x, y: y });
+            }
+
+            drawVertex(canvas_import, ctx_import, import_vertices);
+        })
+        .catch(error => console.error("Greska: ", error));
 }
 
-function drawSquare(ctx, x, y, d) {
-    drawLine(ctx, x, y, x + d, y, "red");
-    drawLine(ctx, x + d, y, x + d, y + d, "yellow");
-    drawLine(ctx, x + d, y + d, x, y + d, "green");
-    drawLine(ctx, x, y + d, x, y, "blue");
+function importLinesFromFile(path) {
+    fetch(path)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Greska!");
+            }
+            return response.text();
+        })
+        .then(text => {
+            const rows = text.trim().split("\n");
+
+            for (const row of rows) {
+                const parts = row.trim().split(",");
+
+                if (parts.length !== 4) continue;
+
+                const x1 = parseFloat(parts[0]);
+                const y1 = parseFloat(parts[1]);
+                const x2 = parseFloat(parts[2]);
+                const y2 = parseFloat(parts[3]);
+
+                if ([x1, y1, x2, y2].some(value => isNaN(value))) continue;
+
+                import_lines.push({ x1, y1, x2, y2 });
+            }
+
+            drawLines(canvas_import, ctx_import, import_lines);
+        })
+        .catch(error => console.error("Greska: ", error));
 }
 
-const canvasQuad = document.getElementById("ctx-quad");
-const ctxQuad = canvasQuad.getContext("2d");
+btn_importVertices.addEventListener("click", function(event) {
+    import_vertices.length = 0;
+    clearCanvas(canvas_import, ctx_import);
+    importPointsFromFile("resources/points.txt");
+});
 
-function drawTriangle(ctx, x1, y1, x2, y2, x3, y3, colour) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.lineTo(x3, y3);
-    ctx.closePath();
-
-    ctx.fillStyle = colour;
-    ctx.fill();
-
-    ctx.strokeStyle = "black";
-    ctx.stroke();
-}
-
-function drawQuad(ctx, x, y, d) {
-    drawTriangle(ctx, x, y, x, y + d, x + d, y + d, "red");
-    drawTriangle(ctx, x, y, x + d, y, x + d, y + d, "blue");
-}
-
-const canvasTriangleStrip = document.getElementById("ctx-triangleStrip");
-const ctxTriangleStrip = canvasTriangleStrip.getContext("2d");
-
-function drawTriangleStrip(ctx, x, y, d) {
-    const width = ctx.canvas.width;
-    const height = ctx.canvas.height;
-
-    for (let i = 0; i < width / d; i++) {
-        for (let j = 0; j < height / d; j++) {
-            drawQuad(ctx, x + i * d, y + j * d, d);
-        }
-    }
-}
-
-const canvasTriangleFan = document.getElementById("ctx-triangleFan");
-const ctxTriangleFan = canvasTriangleFan.getContext("2d");
-
-function drawTriangleFan(ctx, x, y, n) {
-    const r = 50;
-
-    for (let i = 0; i < n; i++) {
-        const angle1 = (2 * Math.PI * i) / n;
-        const angle2 = (2 * Math.PI * (i + 1)) / n;
-
-        const x1 = x + r * Math.cos(angle1);
-        const y1 = y + r * Math.sin(angle1);
-
-        const x2 = x + r * Math.cos(angle2);
-        const y2 = y + r * Math.sin(angle2);
-
-        const colour = i % 2 === 0 ? "lightgray" : "white";
-
-        drawTriangle(ctx, x, y, x1, y1, x2, y2, colour);
-    }
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, 2 * Math.PI);
-    ctx.strokeStyle = "red";
-    ctx.stroke();
-}
-
-drawNetUsingLines(ctxLine, 10, 10);
-drawNetUsingRectangles(ctxRect, 10, 10);
-drawNetUsingCircles(ctxCircle, 10, 10);
-drawSquare(ctxSquare, 0, 0, 100);
-drawQuad(ctxQuad, 0, 0, 100);
-drawTriangleStrip(ctxTriangleStrip, 0, 0, 30);
-drawTriangleFan(ctxTriangleFan, 150, 75, 16);
+btn_importLines.addEventListener("click", function(event) {
+    import_lines.length = 0;
+    clearCanvas(canvas_import, ctx_import);
+    importLinesFromFile("resources/lines.txt");
+})
