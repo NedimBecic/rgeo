@@ -7,16 +7,17 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1> Laboratorijska vježba 2 </h1>
+  <h1> Laboratorijska vježba 3 </h1>
 
   <p> Zadatak 1 </p>
-  <canvas id="ctx-mouseClick"></canvas>
-  <button id="btn-clearCanvas"> Ocisti canvas </button>
-
-  <p> Zadatak 2 </p>
-  <canvas id="ctx-import"> </canvas>
-  <button id="btn-importVertices"> Import verteksa</button>
-  <button id="btn-importLines"> Import duzi</button>
+  <div class="task">
+    <canvas id="ctx-mouseClick"></canvas>
+    <div class="controls">
+      <button id="btn-generatePolygon"> Generisi poligon </button>
+      <button id="btn-clearCanvas"> Ocisti canvas </button>
+    </div>
+    <p id="polygon-message" class="message"></p>
+  </div>
 
   <script src="script.js"></script>
 </body>
