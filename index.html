@@ -7,16 +7,45 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1> Laboratorijska vježba 3 </h1>
+  <h1> Laboratorijska vježba 4 </h1>
 
   <p> Zadatak 1 </p>
   <div class="task">
-    <canvas id="ctx-mouseClick"></canvas>
+    <canvas id="ctx-cohenSutherland" width="450" height="350"></canvas>
     <div class="controls">
-      <button id="btn-generatePolygon"> Generisi poligon </button>
-      <button id="btn-clearCanvas"> Ocisti canvas </button>
+      <button id="btn-generateCohenSutherland"> Generisi duzi </button>
     </div>
-    <p id="polygon-message" class="message"></p>
+  </div>
+
+  <p> Zadatak 2 </p>
+  <div class="task">
+    <canvas id="ctx-liangBarsky" width="450" height="350"></canvas>
+    <div class="controls">
+      <button id="btn-generateLiangBarsky"> Generisi duzi </button>
+    </div>
+  </div>
+
+  <p> Zadatak 3 </p>
+  <div class="task">
+    <canvas id="ctx-sutherlandHodgman" width="450" height="350"></canvas>
+    <div class="controls">
+      <button id="btn-clearPolygon"> Ocisti canvas </button>
+    </div>
+  </div>
+
+  <p> Zadatak 4 </p>
+  <div class="task">
+    <canvas id="ctx-bresenhamLine" width="400" height="400"></canvas>
+  </div>
+
+  <p> Zadatak 5 </p>
+  <div class="task">
+    <canvas id="ctx-bresenhamCircle" width="600" height="300"></canvas>
+  </div>
+
+  <p> Zadatak 6 </p>
+  <div class="task">
+    <canvas id="ctx-wuLine" width="400" height="400"></canvas>
   </div>
 
   <script src="script.js"></script>
