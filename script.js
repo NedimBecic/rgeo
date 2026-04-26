@@ -1,200 +1,44 @@
-const rect_bounds = {
-    xMin: 100,
-    xMax: 300,
-    yMin: 100,
-    yMax: 250
-};
+const canvas_convexHull = document.getElementById("ctx-convexHull");
+const ctx_convexHull = canvas_convexHull.getContext("2d");
 
-const canvas_cohenSutherland = document.getElementById("ctx-cohenSutherland");
-const ctx_cohenSutherland = canvas_cohenSutherland.getContext("2d");
-const btn_generateCohenSutherland = document.getElementById("btn-generateCohenSutherland");
+const btn_generateBruteForceTriangles = document.getElementById("btn-generateBruteForceTriangles");
+const btn_generateBruteForceLines = document.getElementById("btn-generateBruteForceLines");
+const btn_clearCanvas = document.getElementById("btn-clearCanvas");
+const convexHull_message = document.getElementById("convexHull-message");
 
-const canvas_liangBarsky = document.getElementById("ctx-liangBarsky");
-const ctx_liangBarsky = canvas_liangBarsky.getContext("2d");
-const btn_generateLiangBarsky = document.getElementById("btn-generateLiangBarsky");
+const points = [];
+const hull_points = [];
+let selected_method = null;
 
-const canvas_sutherlandHodgman = document.getElementById("ctx-sutherlandHodgman");
-const ctx_sutherlandHodgman = canvas_sutherlandHodgman.getContext("2d");
-const btn_clearPolygon = document.getElementById("btn-clearPolygon");
+const epsilon = 0.000001;
 
-const canvas_bresenhamLine = document.getElementById("ctx-bresenhamLine");
-const ctx_bresenhamLine = canvas_bresenhamLine.getContext("2d");
+canvas_convexHull.addEventListener("click", function(event) {
+    const point = getMousePoint(canvas_convexHull, event);
+    points.push(point);
 
-const canvas_bresenhamCircle = document.getElementById("ctx-bresenhamCircle");
-const ctx_bresenhamCircle = canvas_bresenhamCircle.getContext("2d");
-
-const canvas_wuLine = document.getElementById("ctx-wuLine");
-const ctx_wuLine = canvas_wuLine.getContext("2d");
-
-const polygon_vertices = [];
-let polygon_closed = false;
-let clipped_polygon = [];
-let pending_click = null;
-
-function clearCanvas(canvas, ctx) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function drawClippingRectangle(ctx) {
-    ctx.strokeStyle = "red";
-    ctx.strokeRect(
-        rect_bounds.xMin,
-        rect_bounds.yMin,
-        rect_bounds.xMax - rect_bounds.xMin,
-        rect_bounds.yMax - rect_bounds.yMin
-    );
-    ctx.strokeStyle = "black";
-}
-
-function drawLine(ctx, line, color = "black") {
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.moveTo(line.start.x, line.start.y);
-    ctx.lineTo(line.end.x, line.end.y);
-    ctx.stroke();
-    ctx.strokeStyle = "black";
-}
-
-function generateLines() {
-    const lines = [];
-
-    for (let i = 0; i < 50; i++) {
-        lines.push({
-            start: {
-                x: Math.random() * 450,
-                y: Math.random() * 350
-            },
-            end: {
-                x: Math.random() * 450,
-                y: Math.random() * 350
-            }
-        });
+    if (selected_method) {
+        generateHull(selected_method);
+    } else {
+        setMessage("Dodaj jos tacaka ili odaberi metodu.");
+        drawScene();
     }
+});
 
-    return lines;
-}
+btn_generateBruteForceTriangles.addEventListener("click", function() {
+    generateHull("triangles");
+});
 
-function drawClippedLines(canvas, ctx, clippingFunction) {
-    clearCanvas(canvas, ctx);
-    drawClippingRectangle(ctx);
+btn_generateBruteForceLines.addEventListener("click", function() {
+    generateHull("lines");
+});
 
-    const lines = generateLines();
-
-    for (const line of lines) {
-        drawLine(ctx, line, "#CCCCCC");
-    }
-
-    for (const line of lines) {
-        const clipped = clippingFunction(line);
-
-        if (clipped) {
-            drawLine(ctx, clipped);
-        }
-    }
-}
-
-function getCohenSutherlandCode(point) {
-    let code = 0;
-
-    if (point.x < rect_bounds.xMin) code |= 1;
-    if (point.x > rect_bounds.xMax) code |= 2;
-    if (point.y < rect_bounds.yMin) code |= 4;
-    if (point.y > rect_bounds.yMax) code |= 8;
-
-    return code;
-}
-
-function clipLineCohenSutherland(line) {
-    let x1 = line.start.x;
-    let y1 = line.start.y;
-    let x2 = line.end.x;
-    let y2 = line.end.y;
-    let code1 = getCohenSutherlandCode({ x: x1, y: y1 });
-    let code2 = getCohenSutherlandCode({ x: x2, y: y2 });
-
-    while (true) {
-        if ((code1 | code2) === 0) {
-            return {
-                start: { x: x1, y: y1 },
-                end: { x: x2, y: y2 }
-            };
-        }
-
-        if ((code1 & code2) !== 0) {
-            return null;
-        }
-
-        const code = code1 !== 0 ? code1 : code2;
-        let x = 0;
-        let y = 0;
-
-        if (code & 8) {
-            x = x1 + (x2 - x1) * (rect_bounds.yMax - y1) / (y2 - y1);
-            y = rect_bounds.yMax;
-        } else if (code & 4) {
-            x = x1 + (x2 - x1) * (rect_bounds.yMin - y1) / (y2 - y1);
-            y = rect_bounds.yMin;
-        } else if (code & 2) {
-            y = y1 + (y2 - y1) * (rect_bounds.xMax - x1) / (x2 - x1);
-            x = rect_bounds.xMax;
-        } else if (code & 1) {
-            y = y1 + (y2 - y1) * (rect_bounds.xMin - x1) / (x2 - x1);
-            x = rect_bounds.xMin;
-        }
-
-        if (code === code1) {
-            x1 = x;
-            y1 = y;
-            code1 = getCohenSutherlandCode({ x: x1, y: y1 });
-        } else {
-            x2 = x;
-            y2 = y;
-            code2 = getCohenSutherlandCode({ x: x2, y: y2 });
-        }
-    }
-}
-
-function clipLineLiangBarsky(line) {
-    const dx = line.end.x - line.start.x;
-    const dy = line.end.y - line.start.y;
-    const p = [-dx, dx, -dy, dy];
-    const q = [
-        line.start.x - rect_bounds.xMin,
-        rect_bounds.xMax - line.start.x,
-        line.start.y - rect_bounds.yMin,
-        rect_bounds.yMax - line.start.y
-    ];
-    let u1 = 0;
-    let u2 = 1;
-
-    for (let i = 0; i < 4; i++) {
-        if (p[i] === 0) {
-            if (q[i] < 0) return null;
-            continue;
-        }
-
-        const t = q[i] / p[i];
-
-        if (p[i] < 0) {
-            if (t > u2) return null;
-            if (t > u1) u1 = t;
-        } else {
-            if (t < u1) return null;
-            if (t < u2) u2 = t;
-        }
-    }
-
-    return {
-        start: {
-            x: line.start.x + u1 * dx,
-            y: line.start.y + u1 * dy
-        },
-        end: {
-            x: line.start.x + u2 * dx,
-            y: line.start.y + u2 * dy
-        }
-    };
-}
+btn_clearCanvas.addEventListener("click", function() {
+    points.length = 0;
+    hull_points.length = 0;
+    selected_method = null;
+    setMessage("");
+    drawScene();
+});
 
 function getMousePoint(canvas, event) {
     const rect = canvas.getBoundingClientRect();
@@ -205,344 +49,297 @@ function getMousePoint(canvas, event) {
     };
 }
 
-function drawPolygonScene() {
-    clearCanvas(canvas_sutherlandHodgman, ctx_sutherlandHodgman);
-    drawClippingRectangle(ctx_sutherlandHodgman);
+function clearCanvas(canvas, ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
 
-    if (polygon_vertices.length > 0 && !polygon_closed) {
-        ctx_sutherlandHodgman.beginPath();
-        ctx_sutherlandHodgman.moveTo(polygon_vertices[0].x, polygon_vertices[0].y);
+function setMessage(message) {
+    convexHull_message.textContent = message;
+}
 
-        for (let i = 1; i < polygon_vertices.length; i++) {
-            ctx_sutherlandHodgman.lineTo(polygon_vertices[i].x, polygon_vertices[i].y);
+function drawPoint(ctx, point, color = "#000000") {
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI, false);
+    ctx.fill();
+}
+
+function drawPolygon(ctx, polygon) {
+    if (polygon.length < 2) return;
+
+    ctx.beginPath();
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 2;
+    ctx.moveTo(polygon[0].x, polygon[0].y);
+
+    for (let i = 1; i < polygon.length; i++) {
+        ctx.lineTo(polygon[i].x, polygon[i].y);
+    }
+
+    if (polygon.length > 2) {
+        ctx.closePath();
+    }
+
+    ctx.stroke();
+    ctx.lineWidth = 1;
+}
+
+function drawScene() {
+    clearCanvas(canvas_convexHull, ctx_convexHull);
+
+    if (hull_points.length > 1) {
+        drawPolygon(ctx_convexHull, hull_points);
+    }
+
+    for (const point of points) {
+        drawPoint(ctx_convexHull, point);
+    }
+
+    for (const point of hull_points) {
+        drawPoint(ctx_convexHull, point, "#d00000");
+    }
+}
+
+function arePointsEqual(first, second) {
+    return Math.abs(first.x - second.x) < epsilon && Math.abs(first.y - second.y) < epsilon;
+}
+
+function crossProduct(first, second, third) {
+    return (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x);
+}
+
+function distanceSquared(first, second) {
+    const dx = first.x - second.x;
+    const dy = first.y - second.y;
+    return dx * dx + dy * dy;
+}
+
+function uniquePoints(input_points) {
+    const unique = [];
+
+    for (const point of input_points) {
+        let exists = false;
+
+        for (const current of unique) {
+            if (arePointsEqual(point, current)) {
+                exists = true;
+                break;
+            }
         }
 
-        ctx_sutherlandHodgman.stroke();
+        if (!exists) {
+            unique.push(point);
+        }
     }
 
-    if (clipped_polygon.length > 0) {
-        ctx_sutherlandHodgman.beginPath();
-        ctx_sutherlandHodgman.moveTo(clipped_polygon[0].x, clipped_polygon[0].y);
+    return unique;
+}
 
-        for (let i = 1; i < clipped_polygon.length; i++) {
-            ctx_sutherlandHodgman.lineTo(clipped_polygon[i].x, clipped_polygon[i].y);
+function areAllPointsCollinear(input_points) {
+    if (input_points.length < 3) return true;
+
+    for (let i = 2; i < input_points.length; i++) {
+        if (Math.abs(crossProduct(input_points[0], input_points[1], input_points[i])) > epsilon) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function makeSimplePolygon(input_points) {
+    const unique = uniquePoints(input_points);
+
+    if (unique.length <= 2) {
+        return unique.sort(comparePoints);
+    }
+
+    if (areAllPointsCollinear(unique)) {
+        const sorted = [...unique].sort(comparePoints);
+        return [sorted[0], sorted[sorted.length - 1]];
+    }
+
+    const center = unique.reduce(function(result, point) {
+        return {
+            x: result.x + point.x / unique.length,
+            y: result.y + point.y / unique.length
+        };
+    }, { x: 0, y: 0 });
+
+    const polygon = [...unique].sort(function(first, second) {
+        const angle_first = Math.atan2(first.y - center.y, first.x - center.x);
+        const angle_second = Math.atan2(second.y - center.y, second.x - center.x);
+
+        if (Math.abs(angle_first - angle_second) > epsilon) {
+            return angle_first - angle_second;
         }
 
-        ctx_sutherlandHodgman.closePath();
-        ctx_sutherlandHodgman.fillStyle = "black";
-        ctx_sutherlandHodgman.fill();
-    }
+        return distanceSquared(center, second) - distanceSquared(center, first);
+    });
+
+    return removeCollinearPoints(polygon);
 }
 
-function isInsideBoundary(point, boundary) {
-    if (boundary === "left") return point.x >= rect_bounds.xMin;
-    if (boundary === "right") return point.x <= rect_bounds.xMax;
-    if (boundary === "top") return point.y >= rect_bounds.yMin;
-    return point.y <= rect_bounds.yMax;
+function comparePoints(first, second) {
+    if (Math.abs(first.x - second.x) > epsilon) return first.x - second.x;
+    return first.y - second.y;
 }
 
-function getBoundaryIntersection(start, end, boundary) {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
+function isPointOnSegment(point, start, end) {
+    if (Math.abs(crossProduct(start, end, point)) > epsilon) return false;
 
-    if (boundary === "left") {
-        const x = rect_bounds.xMin;
-        return { x, y: start.y + dy * (x - start.x) / dx };
-    }
-
-    if (boundary === "right") {
-        const x = rect_bounds.xMax;
-        return { x, y: start.y + dy * (x - start.x) / dx };
-    }
-
-    if (boundary === "top") {
-        const y = rect_bounds.yMin;
-        return { x: start.x + dx * (y - start.y) / dy, y };
-    }
-
-    const y = rect_bounds.yMax;
-    return { x: start.x + dx * (y - start.y) / dy, y };
+    return (
+        point.x >= Math.min(start.x, end.x) - epsilon &&
+        point.x <= Math.max(start.x, end.x) + epsilon &&
+        point.y >= Math.min(start.y, end.y) - epsilon &&
+        point.y <= Math.max(start.y, end.y) + epsilon
+    );
 }
 
-function clipPolygonByBoundary(polygon, boundary) {
-    const output = [];
+function removeCollinearPoints(polygon) {
+    const result = [...polygon];
+    let changed = true;
 
-    for (let i = 0; i < polygon.length; i++) {
-        const current = polygon[i];
-        const previous = polygon[(i + polygon.length - 1) % polygon.length];
-        const currentInside = isInsideBoundary(current, boundary);
-        const previousInside = isInsideBoundary(previous, boundary);
+    while (changed && result.length > 2) {
+        changed = false;
 
-        if (currentInside) {
-            if (!previousInside) {
-                output.push(getBoundaryIntersection(previous, current, boundary));
+        for (let i = 0; i < result.length; i++) {
+            const previous = result[(i + result.length - 1) % result.length];
+            const current = result[i];
+            const next = result[(i + 1) % result.length];
+
+            if (isPointOnSegment(current, previous, next)) {
+                result.splice(i, 1);
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
+function isPointInsideTriangle(point, first, second, third) {
+    const area = crossProduct(first, second, third);
+    if (Math.abs(area) < epsilon) return false;
+
+    const first_orientation = crossProduct(point, first, second);
+    const second_orientation = crossProduct(point, second, third);
+    const third_orientation = crossProduct(point, third, first);
+
+    const has_negative = first_orientation < -epsilon || second_orientation < -epsilon || third_orientation < -epsilon;
+    const has_positive = first_orientation > epsilon || second_orientation > epsilon || third_orientation > epsilon;
+
+    return !(has_negative && has_positive);
+}
+
+function bruteForceTriangles(input_points) {
+    const candidates = [];
+
+    for (let p = 0; p < input_points.length; p++) {
+        let is_hull_vertex = true;
+        let i = 0;
+
+        while (is_hull_vertex && i < input_points.length) {
+            if (i !== p) {
+                let j = i + 1;
+
+                while (is_hull_vertex && j < input_points.length) {
+                    if (j !== p) {
+                        let k = j + 1;
+
+                        while (is_hull_vertex && k < input_points.length) {
+                            if (
+                                k !== p &&
+                                isPointInsideTriangle(input_points[p], input_points[i], input_points[j], input_points[k])
+                            ) {
+                                is_hull_vertex = false;
+                            }
+
+                            k++;
+                        }
+                    }
+
+                    j++;
+                }
             }
 
-            output.push(current);
-        } else if (previousInside) {
-            output.push(getBoundaryIntersection(previous, current, boundary));
+            i++;
+        }
+
+        if (is_hull_vertex) {
+            candidates.push(input_points[p]);
         }
     }
 
-    return output;
+    return makeSimplePolygon(candidates);
 }
 
-function clipPolygonSutherlandHodgman(polygon) {
-    let clipped = [...polygon];
-    const boundaries = ["left", "right", "top", "bottom"];
+function arePointsOnSameSideOfLine(input_points, first, second) {
+    let has_positive = false;
+    let has_negative = false;
 
-    for (const boundary of boundaries) {
-        clipped = clipPolygonByBoundary(clipped, boundary);
+    for (const point of input_points) {
+        const orientation = crossProduct(first, second, point);
 
-        if (clipped.length === 0) {
-            return [];
+        if (orientation > epsilon) {
+            has_positive = true;
+        } else if (orientation < -epsilon) {
+            has_negative = true;
+        }
+
+        if (has_positive && has_negative) {
+            return false;
         }
     }
 
-    return clipped;
+    return true;
 }
 
-function addPolygonVertex(event) {
-    if (polygon_closed) return;
+function bruteForceLines(input_points) {
+    const belongs_to_hull = new Array(input_points.length).fill(false);
 
-    polygon_vertices.push(getMousePoint(canvas_sutherlandHodgman, event));
-    drawPolygonScene();
-}
-
-function finishPolygon() {
-    if (pending_click) {
-        clearTimeout(pending_click);
-        pending_click = null;
-    }
-
-    if (polygon_vertices.length < 3 || polygon_closed) return;
-
-    polygon_closed = true;
-    clipped_polygon = clipPolygonSutherlandHodgman(polygon_vertices);
-    drawPolygonScene();
-}
-
-function resetPolygonTask() {
-    if (pending_click) {
-        clearTimeout(pending_click);
-        pending_click = null;
-    }
-
-    polygon_vertices.length = 0;
-    clipped_polygon = [];
-    polygon_closed = false;
-    drawPolygonScene();
-}
-
-function drawPixel(ctx, x, y, color = "black") {
-    ctx.fillStyle = color;
-    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
-}
-
-function drawBresenhamLine(ctx, x1, y1, x2, y2) {
-    let x = Math.round(x1);
-    let y = Math.round(y1);
-    const endX = Math.round(x2);
-    const endY = Math.round(y2);
-    const dx = Math.abs(endX - x);
-    const dy = Math.abs(endY - y);
-    const sx = x < endX ? 1 : -1;
-    const sy = y < endY ? 1 : -1;
-    let err = dx - dy;
-
-    while (true) {
-        drawPixel(ctx, x, y);
-
-        if (x === endX && y === endY) break;
-
-        const e2 = 2 * err;
-
-        if (e2 > -dy) {
-            err -= dy;
-            x += sx;
-        }
-
-        if (e2 < dx) {
-            err += dx;
-            y += sy;
+    for (let i = 0; i < input_points.length; i++) {
+        for (let j = i + 1; j < input_points.length; j++) {
+            if (!arePointsEqual(input_points[i], input_points[j]) && arePointsOnSameSideOfLine(input_points, input_points[i], input_points[j])) {
+                belongs_to_hull[i] = true;
+                belongs_to_hull[j] = true;
+            }
         }
     }
-}
 
-function drawBresenhamPattern(ctx) {
-    const center = { x: 200, y: 200 };
-    const length = 70;
+    const candidates = [];
 
-    for (let i = 0; i < 72; i++) {
-        const angle = i * Math.PI / 36;
-        const x = center.x + length * Math.cos(angle);
-        const y = center.y + length * Math.sin(angle);
-        drawBresenhamLine(ctx, center.x, center.y, x, y);
-    }
-}
-
-function drawCirclePoints(ctx, centerX, centerY, x, y) {
-    drawPixel(ctx, centerX + x, centerY + y);
-    drawPixel(ctx, centerX - x, centerY + y);
-    drawPixel(ctx, centerX + x, centerY - y);
-    drawPixel(ctx, centerX - x, centerY - y);
-    drawPixel(ctx, centerX + y, centerY + x);
-    drawPixel(ctx, centerX - y, centerY + x);
-    drawPixel(ctx, centerX + y, centerY - x);
-    drawPixel(ctx, centerX - y, centerY - x);
-}
-
-function drawBresenhamCircle(ctx, centerX, centerY, radius) {
-    let x = 0;
-    let y = radius;
-    let d = 3 - 2 * radius;
-
-    while (x <= y) {
-        drawCirclePoints(ctx, centerX, centerY, x, y);
-
-        if (d < 0) {
-            d += 4 * x + 6;
-        } else {
-            d += 4 * (x - y) + 10;
-            y--;
+    for (let i = 0; i < input_points.length; i++) {
+        if (belongs_to_hull[i]) {
+            candidates.push(input_points[i]);
         }
-
-        x++;
     }
+
+    return makeSimplePolygon(candidates);
 }
 
-function drawBresenhamCircles(ctx) {
-    for (let radius = 5; radius <= 100; radius += 5) {
-        drawBresenhamCircle(ctx, 300, 150, radius);
+function generateHull(method) {
+    selected_method = method;
+
+    if (uniquePoints(points).length < 3) {
+        hull_points.length = 0;
+        setMessage("Potrebno je najmanje 3 tacke za generisanje konveksnog omotaca.");
+        drawScene();
+        return;
     }
-}
 
-function integerPart(value) {
-    return Math.floor(value);
-}
+    const generated_hull = method === "triangles" ? bruteForceTriangles(points) : bruteForceLines(points);
+    hull_points.length = 0;
+    hull_points.push(...generated_hull);
 
-function roundValue(value) {
-    return Math.round(value);
-}
-
-function fractionalPart(value) {
-    return value - Math.floor(value);
-}
-
-function reverseFractionalPart(value) {
-    return 1 - fractionalPart(value);
-}
-
-function combinePixel(ctx, x, y, graylevel) {
-    if (x < 0 || x >= ctx.canvas.width || y < 0 || y >= ctx.canvas.height) return;
-
-    const pixdata = ctx.getImageData(x, y, 1, 1).data;
-    const pixc = pixdata[3] === 0 ? 255 : pixdata[0];
-    const comblevel = Math.max(graylevel + pixc - 255, 0);
-    ctx.fillStyle = "rgb(" + comblevel + "," + comblevel + "," + comblevel + ")";
-    ctx.fillRect(x, y, 1, 1);
-}
-
-function plotWuPixel(ctx, x, y, brightness, steep) {
-    const graylevel = Math.round(255 * (1 - brightness));
-
-    if (steep) {
-        combinePixel(ctx, y, x, graylevel);
+    if (method === "triangles") {
+        setMessage("Konveksni omotac je generisan brute force metodom preko trouglova.");
     } else {
-        combinePixel(ctx, x, y, graylevel);
+        setMessage("Konveksni omotac je generisan brute force metodom preko pravaca.");
     }
+
+    drawScene();
 }
 
-function drawWuLine(ctx, x0, y0, x1, y1) {
-    let steep = Math.abs(y1 - y0) > Math.abs(x1 - x0);
-
-    if (steep) {
-        const oldX0 = x0;
-        x0 = y0;
-        y0 = oldX0;
-        const oldX1 = x1;
-        x1 = y1;
-        y1 = oldX1;
-    }
-
-    if (x0 > x1) {
-        const oldX0 = x0;
-        x0 = x1;
-        x1 = oldX0;
-        const oldY0 = y0;
-        y0 = y1;
-        y1 = oldY0;
-    }
-
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const gradient = dx === 0 ? 1 : dy / dx;
-
-    let xEnd = roundValue(x0);
-    let yEnd = y0 + gradient * (xEnd - x0);
-    let xGap = reverseFractionalPart(x0 + 0.5);
-    const xPixel1 = xEnd;
-    const yPixel1 = integerPart(yEnd);
-
-    plotWuPixel(ctx, xPixel1, yPixel1, reverseFractionalPart(yEnd) * xGap, steep);
-    plotWuPixel(ctx, xPixel1, yPixel1 + 1, fractionalPart(yEnd) * xGap, steep);
-
-    let intery = yEnd + gradient;
-
-    xEnd = roundValue(x1);
-    yEnd = y1 + gradient * (xEnd - x1);
-    xGap = fractionalPart(x1 + 0.5);
-    const xPixel2 = xEnd;
-    const yPixel2 = integerPart(yEnd);
-
-    plotWuPixel(ctx, xPixel2, yPixel2, reverseFractionalPart(yEnd) * xGap, steep);
-    plotWuPixel(ctx, xPixel2, yPixel2 + 1, fractionalPart(yEnd) * xGap, steep);
-
-    for (let x = xPixel1 + 1; x < xPixel2; x++) {
-        plotWuPixel(ctx, x, integerPart(intery), reverseFractionalPart(intery), steep);
-        plotWuPixel(ctx, x, integerPart(intery) + 1, fractionalPart(intery), steep);
-        intery += gradient;
-    }
-}
-
-function drawWuPattern(ctx) {
-    const center = { x: 200, y: 200 };
-    const length = 70;
-
-    for (let i = 0; i < 72; i++) {
-        const angle = i * Math.PI / 36;
-        const x = center.x + length * Math.cos(angle);
-        const y = center.y + length * Math.sin(angle);
-        drawWuLine(ctx, center.x, center.y, x, y);
-    }
-}
-
-canvas_sutherlandHodgman.addEventListener("click", function(event) {
-    if (pending_click) clearTimeout(pending_click);
-
-    pending_click = setTimeout(function() {
-        pending_click = null;
-        addPolygonVertex(event);
-    }, 220);
-});
-
-canvas_sutherlandHodgman.addEventListener("dblclick", function() {
-    finishPolygon();
-});
-
-btn_clearPolygon.addEventListener("click", resetPolygonTask);
-
-btn_generateCohenSutherland.addEventListener("click", function() {
-    drawClippedLines(canvas_cohenSutherland, ctx_cohenSutherland, clipLineCohenSutherland);
-});
-
-btn_generateLiangBarsky.addEventListener("click", function() {
-    drawClippedLines(canvas_liangBarsky, ctx_liangBarsky, clipLineLiangBarsky);
-});
-
-drawClippedLines(canvas_cohenSutherland, ctx_cohenSutherland, clipLineCohenSutherland);
-drawClippedLines(canvas_liangBarsky, ctx_liangBarsky, clipLineLiangBarsky);
-drawPolygonScene();
-drawBresenhamPattern(ctx_bresenhamLine);
-drawBresenhamCircles(ctx_bresenhamCircle);
-drawWuPattern(ctx_wuLine);
+drawScene();
