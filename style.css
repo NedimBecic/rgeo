@@ -19,7 +19,7 @@ body {
 }
 
 .workspace {
-  width: min(100%, 980px);
+  width: min(100%, 720px);
 }
 
 .toolbar {
