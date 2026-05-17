@@ -7,7 +7,7 @@ body {
   min-height: 100vh;
   font-family: Arial, Helvetica, sans-serif;
   color: #202124;
-  background: #f5f7fa;
+  background: #f3f6f8;
 }
 
 .page {
@@ -19,7 +19,7 @@ body {
 }
 
 .workspace {
-  width: min(100%, 720px);
+  width: min(100%, 980px);
 }
 
 .toolbar {
@@ -66,12 +66,12 @@ canvas {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid #cbd5d8;
+  border: 1px solid #c6d1d8;
   border-radius: 8px;
   background: #ffffff;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 680px) {
   .page {
     padding: 16px;
   }

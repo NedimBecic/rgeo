@@ -1,99 +1,232 @@
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function pixelKey(x, y) {
-  return x + "," + y;
+function randomInteger(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function addPixel(pixels, x, y, intensity) {
-  const key = pixelKey(x, y);
-  const value = clamp01(intensity);
-
-  if (!pixels.has(key) || pixels.get(key) < value) {
-    pixels.set(key, value);
-  }
+function pointInRectangle(point, rectangle) {
+  return point.x >= rectangle.x1 &&
+    point.x <= rectangle.x2 &&
+    point.y >= rectangle.y1 &&
+    point.y <= rectangle.y2;
 }
 
-function addSymmetricPixels(pixels, X, Y, x, y, intensity) {
-  addPixel(pixels, X + x, Y + y, intensity);
-  addPixel(pixels, X - x, Y + y, intensity);
-  addPixel(pixels, X + x, Y - y, intensity);
-  addPixel(pixels, X - x, Y - y, intensity);
-  addPixel(pixels, X + y, Y + x, intensity);
-  addPixel(pixels, X - y, Y + x, intensity);
-  addPixel(pixels, X + y, Y - x, intensity);
-  addPixel(pixels, X - y, Y - x, intensity);
-}
+function createCellMatrix(p, q) {
+  const C = [];
 
-function CombinePixel(ctx, X, Y, graylevel) {
-  if (X < 0 || Y < 0 || X >= ctx.canvas.width || Y >= ctx.canvas.height) {
-    return;
+  for (let row = 0; row < p; row++) {
+    const gridRow = [];
+
+    for (let col = 0; col < q; col++) {
+      gridRow.push([]);
+    }
+
+    C.push(gridRow);
   }
 
-  const pixdata = ctx.getImageData(X, Y, 1, 1).data;
-  const pixc = pixdata[3] === 0 ? 255 : pixdata[0];
-  const comblevel = Math.max(Math.round(graylevel) + pixc - 255, 0);
-
-  ctx.fillStyle = "rgb(" + comblevel + "," + comblevel + "," + comblevel + ")";
-  ctx.fillRect(X, Y, 1, 1);
+  return C;
 }
 
-function CircleDraw_Antialiased(ctx, X, Y, r) {
-  const radius = Math.max(0, r);
-  const pixels = new Map();
-  const limit = Math.ceil(radius / Math.sqrt(2));
+function MakeGrid(P, p, q) {
+  let x1 = Infinity;
+  let x2 = -Infinity;
+  let y1 = Infinity;
+  let y2 = -Infinity;
 
-  for (let x = 0; x <= limit; x++) {
-    const exactY = Math.sqrt(radius * radius - x * x);
-    const y1 = Math.floor(exactY);
-    const y2 = y1 + 1;
-    const fraction = exactY - y1;
+  for (const point of P) {
+    x1 = Math.min(x1, point.x);
+    x2 = Math.max(x2, point.x);
+    y1 = Math.min(y1, point.y);
+    y2 = Math.max(y2, point.y);
+  }
 
-    addSymmetricPixels(pixels, X, Y, x, y1, 1 - fraction);
+  if (P.length === 0) {
+    x1 = 0;
+    x2 = 1;
+    y1 = 0;
+    y2 = 1;
+  } else {
+    const width = x2 - x1;
+    const height = y2 - y1;
+    x2 += width === 0 ? 1 : 0.01 * width;
+    y2 += height === 0 ? 1 : 0.01 * height;
+  }
 
-    if (fraction > 0) {
-      addSymmetricPixels(pixels, X, Y, x, y2, fraction);
+  const G = {
+    p: p,
+    q: q,
+    x1: x1,
+    x2: x2,
+    y1: y1,
+    y2: y2,
+    C: createCellMatrix(p, q)
+  };
+
+  const w = (G.x2 - G.x1) / G.q;
+  const h = (G.y2 - G.y1) / G.p;
+
+  for (const point of P) {
+    const row = clamp(Math.floor((point.y - G.y1) / h), 0, G.p - 1);
+    const col = clamp(Math.floor((point.x - G.x1) / w), 0, G.q - 1);
+    G.C[row][col].push(point);
+  }
+
+  return G;
+}
+
+function RectangularSearch_GridMethod(G, R) {
+  const rectangle = {
+    x1: Math.min(R.x1, R.x2),
+    x2: Math.max(R.x1, R.x2),
+    y1: Math.min(R.y1, R.y2),
+    y2: Math.max(R.y1, R.y2)
+  };
+
+  const Q = [];
+  const w = (G.x2 - G.x1) / G.q;
+  const h = (G.y2 - G.y1) / G.p;
+  const col1 = clamp(Math.floor((rectangle.x1 - G.x1) / w), 0, G.q - 1);
+  const col2 = clamp(Math.floor((rectangle.x2 - G.x1) / w), 0, G.q - 1);
+  const row1 = clamp(Math.floor((rectangle.y1 - G.y1) / h), 0, G.p - 1);
+  const row2 = clamp(Math.floor((rectangle.y2 - G.y1) / h), 0, G.p - 1);
+
+  for (let row = row1; row <= row2; row++) {
+    for (let col = col1; col <= col2; col++) {
+      for (const point of G.C[row][col]) {
+        if (pointInRectangle(point, rectangle)) {
+          Q.push(point);
+        }
+      }
     }
   }
 
-  for (const entry of pixels) {
-    const parts = entry[0].split(",");
-    const graylevel = 255 * (1 - entry[1]);
-    CombinePixel(ctx, Number(parts[0]), Number(parts[1]), graylevel);
+  return Q;
+}
+
+function generatePoints(canvas) {
+  const count = randomInteger(50, 100);
+  const points = [];
+  const used = new Set();
+  const margin = 36;
+
+  while (points.length < count) {
+    const x = randomInteger(margin, canvas.width - margin);
+    const y = randomInteger(margin, canvas.height - margin);
+    const key = x + "," + y;
+
+    if (!used.has(key)) {
+      used.add(key);
+      points.push({ x: x, y: y });
+    }
+  }
+
+  return points;
+}
+
+function generateRectangle(canvas) {
+  const width = randomInteger(150, 300);
+  const height = randomInteger(90, 190);
+  const x1 = randomInteger(80, canvas.width - width - 80);
+  const y1 = randomInteger(70, canvas.height - height - 70);
+
+  return {
+    x1: x1,
+    x2: x1 + width,
+    y1: y1,
+    y2: y1 + height
+  };
+}
+
+function drawPoint(ctx, point, radius, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+function drawGrid(ctx, G) {
+  const w = (G.x2 - G.x1) / G.q;
+  const h = (G.y2 - G.y1) / G.p;
+
+  ctx.strokeStyle = "#d7e0e6";
+  ctx.lineWidth = 1;
+
+  for (let col = 0; col <= G.q; col++) {
+    const x = G.x1 + col * w;
+    ctx.beginPath();
+    ctx.moveTo(x, G.y1);
+    ctx.lineTo(x, G.y2);
+    ctx.stroke();
+  }
+
+  for (let row = 0; row <= G.p; row++) {
+    const y = G.y1 + row * h;
+    ctx.beginPath();
+    ctx.moveTo(G.x1, y);
+    ctx.lineTo(G.x2, y);
+    ctx.stroke();
   }
 }
 
-function drawScene(canvas, ctx, statusElement) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function drawRectangle(ctx, R) {
+  const width = R.x2 - R.x1;
+  const height = R.y2 - R.y1;
 
-  for (let r = 5; r <= 100; r += 5) {
-    CircleDraw_Antialiased(ctx, 300, 150, r);
+  ctx.fillStyle = "rgba(229, 87, 53, 0.12)";
+  ctx.strokeStyle = "#e55735";
+  ctx.lineWidth = 3;
+  ctx.fillRect(R.x1, R.y1, width, height);
+  ctx.strokeRect(R.x1, R.y1, width, height);
+}
+
+function drawScene(ctx, points, grid, rectangle, foundPoints) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  drawGrid(ctx, grid);
+  drawRectangle(ctx, rectangle);
+
+  for (const point of points) {
+    drawPoint(ctx, point, 4, "#23424a");
   }
 
-  ctx.fillStyle = "#d62828";
-  ctx.beginPath();
-  ctx.arc(300, 150, 3, 0, 2 * Math.PI);
-  ctx.fill();
+  for (const point of foundPoints) {
+    drawPoint(ctx, point, 7, "#c81d25");
+    drawPoint(ctx, point, 3, "#ffffff");
+  }
+}
 
-  statusElement.textContent = "Iscrtano je 20 koncentricnih kruznica. Centar: (300, 150), poluprecnici: 5 do 100.";
+function runDemo(canvas, ctx, statusElement) {
+  const points = generatePoints(canvas);
+  const p = 8;
+  const q = 10;
+  const grid = MakeGrid(points, p, q);
+  const rectangle = generateRectangle(canvas);
+  const foundPoints = RectangularSearch_GridMethod(grid, rectangle);
+
+  drawScene(ctx, points, grid, rectangle, foundPoints);
+
+  statusElement.textContent = "Broj tacaka: " + points.length +
+    ". Format mreze: " + p + " x " + q +
+    ". Tacaka u pravougaoniku: " + foundPoints.length + ".";
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { CircleDraw_Antialiased, CombinePixel };
+  module.exports = { MakeGrid, RectangularSearch_GridMethod, pointInRectangle };
 }
 
 if (typeof document !== "undefined") {
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const statusElement = document.getElementById("status");
-  const drawButton = document.getElementById("drawButton");
+  const generateButton = document.getElementById("generateButton");
 
-  drawButton.addEventListener("click", function() {
-    drawScene(canvas, ctx, statusElement);
+  generateButton.addEventListener("click", function() {
+    runDemo(canvas, ctx, statusElement);
   });
 
-  drawScene(canvas, ctx, statusElement);
+  runDemo(canvas, ctx, statusElement);
 }
