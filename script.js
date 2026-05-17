@@ -1,263 +1,162 @@
-function sqr(x) {
-  return x * x;
-}
+function binomial(n, k) {
+  if (k < 0 || k > n) return 0;
 
-function pointDistanceSquared(A, B) {
-  return sqr(A.x - B.x) + sqr(A.y - B.y);
-}
+  let result = 1;
+  const limit = Math.min(k, n - k);
 
-function GenerateCurvePoints_Adaptive(phi, psi, tmin, tmax, h, d) {
-  const points = [];
-  const direction = tmax >= tmin ? 1 : -1;
-  let step = Math.abs(h) * direction;
-  const desiredDistanceSquared = d * d;
-  const smallestAcceptedDistanceSquared = sqr(0.3 * d);
-  const intervalLength = Math.abs(tmax - tmin);
-  const smallestStep = Math.max(intervalLength * 1e-9, 1e-12);
-
-  if (intervalLength === 0 || step === 0 || d <= 0) {
-    return [{ x: phi(tmin), y: psi(tmin) }];
+  for (let i = 1; i <= limit; i++) {
+    result = result * (n - limit + i) / i;
   }
 
-  let t = tmin;
-  let currentPoint = { x: phi(t), y: psi(t) };
-  let lastAcceptedPoint = currentPoint;
+  return result;
+}
 
-  points.push(currentPoint);
+function GenerateBezierCurvePoints(P, n) {
+  const curvePoints = [];
 
-  while ((tmax - t) * direction > 1e-12) {
-    if (Math.abs(step) > Math.abs(tmax - t)) {
-      step = tmax - t;
-    }
-
-    const previousPoint = currentPoint;
-    let nextT = t + step;
-    let nextPoint = { x: phi(nextT), y: psi(nextT) };
-    let reductions = 0;
-
-    while (
-      pointDistanceSquared(previousPoint, nextPoint) > desiredDistanceSquared &&
-      Math.abs(step) > smallestStep &&
-      reductions < 80
-    ) {
-      step *= 0.8;
-      nextT = t + step;
-      nextPoint = { x: phi(nextT), y: psi(nextT) };
-      reductions++;
-    }
-
-    if (pointDistanceSquared(lastAcceptedPoint, nextPoint) > smallestAcceptedDistanceSquared) {
-      points.push(nextPoint);
-      lastAcceptedPoint = nextPoint;
-    }
-
-    t = nextT;
-    currentPoint = nextPoint;
-    step *= 1.2;
+  if (P.length === 0 || n <= 0) {
+    return curvePoints;
   }
 
-  const finalPoint = { x: phi(tmax), y: psi(tmax) };
-
-  if (pointDistanceSquared(lastAcceptedPoint, finalPoint) > 1e-16) {
-    points.push(finalPoint);
+  if (n === 1) {
+    return [{ x: P[0].x, y: P[0].y }];
   }
 
-  return points;
-}
+  const degree = P.length - 1;
+  const coefficients = [];
 
-function createCurves() {
-  return [
-    {
-      name: "Lissajousova kriva",
-      color: "#0f766e",
-      tmin: 0,
-      tmax: 2 * Math.PI,
-      h: 0.08,
-      d: 0.045,
-      phi: function(t) {
-        return Math.sin(3 * t + Math.PI / 2);
-      },
-      psi: function(t) {
-        return Math.sin(4 * t);
-      }
-    },
-    {
-      name: "Hipotrohoida",
-      color: "#d97706",
-      tmin: 0,
-      tmax: 6 * Math.PI,
-      h: 0.08,
-      d: 0.12,
-      phi: function(t) {
-        const R = 5;
-        const r = 3;
-        const a = 5;
-        return (R - r) * Math.cos(t) + a * Math.cos((R - r) * t / r);
-      },
-      psi: function(t) {
-        const R = 5;
-        const r = 3;
-        const a = 5;
-        return (R - r) * Math.sin(t) - a * Math.sin((R - r) * t / r);
-      }
-    },
-    {
-      name: "Epicikloida",
-      color: "#2563eb",
-      tmin: 0,
-      tmax: 2 * Math.PI,
-      h: 0.07,
-      d: 0.1,
-      phi: function(t) {
-        const R = 3;
-        const r = 1;
-        return (R + r) * Math.cos(t) - r * Math.cos((R + r) * t / r);
-      },
-      psi: function(t) {
-        const R = 3;
-        const r = 1;
-        return (R + r) * Math.sin(t) - r * Math.sin((R + r) * t / r);
-      }
-    },
-    {
-      name: "Leptir kriva",
-      color: "#be123c",
-      tmin: 0,
-      tmax: 12 * Math.PI,
-      h: 0.08,
-      d: 0.08,
-      phi: function(t) {
-        const factor = Math.exp(Math.cos(t)) - 2 * Math.cos(4 * t) - sqr(sqr(Math.sin(t / 12))) * Math.sin(t / 12);
-        return Math.sin(t) * factor;
-      },
-      psi: function(t) {
-        const factor = Math.exp(Math.cos(t)) - 2 * Math.cos(4 * t) - sqr(sqr(Math.sin(t / 12))) * Math.sin(t / 12);
-        return Math.cos(t) * factor;
-      }
+  for (let i = 0; i <= degree; i++) {
+    coefficients.push(binomial(degree, i));
+  }
+
+  for (let j = 0; j < n; j++) {
+    const t = j / (n - 1);
+    const s = 1 - t;
+    let x = 0;
+    let y = 0;
+
+    for (let i = 0; i <= degree; i++) {
+      const weight = coefficients[i] * Math.pow(t, i) * Math.pow(s, degree - i);
+      x += weight * P[i].x;
+      y += weight * P[i].y;
     }
-  ];
-}
 
-function curveBounds(points) {
-  let minX = points[0].x;
-  let maxX = points[0].x;
-  let minY = points[0].y;
-  let maxY = points[0].y;
-
-  for (const point of points) {
-    minX = Math.min(minX, point.x);
-    maxX = Math.max(maxX, point.x);
-    minY = Math.min(minY, point.y);
-    maxY = Math.max(maxY, point.y);
+    curvePoints.push({ x: x, y: y });
   }
 
-  return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
+  return curvePoints;
 }
 
-function mapPoint(point, bounds, area) {
-  const width = Math.max(bounds.maxX - bounds.minX, 1e-9);
-  const height = Math.max(bounds.maxY - bounds.minY, 1e-9);
-  const scale = 0.78 * Math.min(area.width / width, area.height / height);
-  const centerX = area.x + area.width / 2;
-  const centerY = area.y + area.height / 2 + 12;
-  const middleX = (bounds.minX + bounds.maxX) / 2;
-  const middleY = (bounds.minY + bounds.maxY) / 2;
-
-  return {
-    x: centerX + (point.x - middleX) * scale,
-    y: centerY - (point.y - middleY) * scale
-  };
+function drawPoint(ctx, point, radius, fill, stroke) {
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 }
 
-function drawPolyline(ctx, points, bounds, area, color) {
-  if (points.length === 0) return;
+function drawPolyline(ctx, points, color, width) {
+  if (points.length < 2) return;
 
   ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
 
-  for (let i = 0; i < points.length; i++) {
-    const mapped = mapPoint(points[i], bounds, area);
-
-    if (i === 0) {
-      ctx.moveTo(mapped.x, mapped.y);
-    } else {
-      ctx.lineTo(mapped.x, mapped.y);
-    }
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
   }
 
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = width;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.stroke();
 }
 
-function drawCurvePanel(ctx, curve, area) {
-  const points = GenerateCurvePoints_Adaptive(curve.phi, curve.psi, curve.tmin, curve.tmax, curve.h, curve.d);
-  const bounds = curveBounds(points);
-
-  ctx.fillStyle = "#f8fafc";
-  ctx.fillRect(area.x, area.y, area.width, area.height);
-  ctx.strokeStyle = "#d6dee3";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(area.x + 0.5, area.y + 0.5, area.width - 1, area.height - 1);
-
-  ctx.fillStyle = "#1f2937";
-  ctx.font = "700 18px Arial, Helvetica, sans-serif";
-  ctx.fillText(curve.name, area.x + 22, area.y + 34);
-  ctx.fillStyle = "#64748b";
-  ctx.font = "14px Arial, Helvetica, sans-serif";
-  ctx.fillText("Broj tacaka: " + points.length, area.x + 22, area.y + 56);
-
-  drawPolyline(ctx, points, bounds, {
-    x: area.x + 18,
-    y: area.y + 64,
-    width: area.width - 36,
-    height: area.height - 84
-  }, curve.color);
-
-  return points.length;
-}
-
-function drawScene(canvas, ctx, statusElement) {
-  const curves = createCurves();
-  const padding = 18;
-  const gap = 18;
-  const panelWidth = (canvas.width - 2 * padding - gap) / 2;
-  const panelHeight = (canvas.height - 2 * padding - gap) / 2;
-  let totalPoints = 0;
+function drawScene(ctx, controlPoints, curvePoints) {
+  const canvas = ctx.canvas;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < curves.length; i++) {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
+  drawPolyline(ctx, controlPoints, "#9aa7b4", 1.5);
+  drawPolyline(ctx, curvePoints, "#d12c4f", 3);
 
-    totalPoints += drawCurvePanel(ctx, curves[i], {
-      x: padding + col * (panelWidth + gap),
-      y: padding + row * (panelHeight + gap),
-      width: panelWidth,
-      height: panelHeight
-    });
+  for (let i = 0; i < curvePoints.length; i++) {
+    if (i % 8 === 0 || i === curvePoints.length - 1) {
+      drawPoint(ctx, curvePoints[i], 2.5, "#d12c4f", "#d12c4f");
+    }
   }
 
-  statusElement.textContent = "Iscrtane su 4 krive sa ukupno " + totalPoints + " adaptivno generisanih tacaka.";
+  for (let i = 0; i < controlPoints.length; i++) {
+    drawPoint(ctx, controlPoints[i], 7, "#1f6feb", "#ffffff");
+    ctx.fillStyle = "#25313f";
+    ctx.font = "13px Arial, Helvetica, sans-serif";
+    ctx.fillText("P" + i, controlPoints[i].x + 10, controlPoints[i].y - 10);
+  }
+}
+
+function canvasPointFromEvent(canvas, event) {
+  const rect = canvas.getBoundingClientRect();
+
+  return {
+    x: (event.clientX - rect.left) * canvas.width / rect.width,
+    y: (event.clientY - rect.top) * canvas.height / rect.height
+  };
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { GenerateCurvePoints_Adaptive };
+  module.exports = { GenerateBezierCurvePoints };
 }
 
 if (typeof document !== "undefined") {
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const statusElement = document.getElementById("status");
-  const drawButton = document.getElementById("drawButton");
+  const pointCountInput = document.getElementById("pointCount");
+  const generateButton = document.getElementById("generateButton");
+  const clearButton = document.getElementById("clearButton");
+  const controlPoints = [];
+  let curvePoints = [];
 
-  drawButton.addEventListener("click", function() {
-    drawScene(canvas, ctx, statusElement);
+  function updateStatus() {
+    if (controlPoints.length < 2) {
+      statusElement.textContent = "Zadato je " + controlPoints.length + " upravljackih tacaka. Za krivu su potrebne barem 2.";
+    } else if (curvePoints.length === 0) {
+      statusElement.textContent = "Zadato je " + controlPoints.length + " upravljackih tacaka. Kliknite na dugme za generisanje.";
+    } else {
+      statusElement.textContent = "Generisana je Bezierova kriva sa " + curvePoints.length + " tacaka i " + controlPoints.length + " upravljackih tacaka.";
+    }
+  }
+
+  canvas.addEventListener("click", function(event) {
+    controlPoints.push(canvasPointFromEvent(canvas, event));
+    curvePoints = [];
+    drawScene(ctx, controlPoints, curvePoints);
+    updateStatus();
   });
 
-  drawScene(canvas, ctx, statusElement);
+  generateButton.addEventListener("click", function() {
+    const pointCount = Math.max(2, Math.min(1000, Number(pointCountInput.value) || 100));
+    pointCountInput.value = pointCount;
+
+    if (controlPoints.length >= 2) {
+      curvePoints = GenerateBezierCurvePoints(controlPoints, pointCount);
+    }
+
+    drawScene(ctx, controlPoints, curvePoints);
+    updateStatus();
+  });
+
+  clearButton.addEventListener("click", function() {
+    controlPoints.length = 0;
+    curvePoints = [];
+    drawScene(ctx, controlPoints, curvePoints);
+    updateStatus();
+  });
+
+  drawScene(ctx, controlPoints, curvePoints);
+  updateStatus();
 }
