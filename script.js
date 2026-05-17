@@ -1,162 +1,222 @@
-function binomial(n, k) {
-  if (k < 0 || k > n) return 0;
+const EPSILON = 1e-9;
 
-  let result = 1;
-  const limit = Math.min(k, n - k);
-
-  for (let i = 1; i <= limit; i++) {
-    result = result * (n - limit + i) / i;
-  }
-
-  return result;
+function cross(A, B, C) {
+  return (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
 }
 
-function GenerateBezierCurvePoints(P, n) {
-  const curvePoints = [];
+function distanceSquared(A, B) {
+  const dx = A.x - B.x;
+  const dy = A.y - B.y;
+  return dx * dx + dy * dy;
+}
 
-  if (P.length === 0 || n <= 0) {
-    return curvePoints;
+function areSamePoint(A, B) {
+  return Math.abs(A.x - B.x) < EPSILON && Math.abs(A.y - B.y) < EPSILON;
+}
+
+function swap(P, i, j) {
+  const temp = P[i];
+  P[i] = P[j];
+  P[j] = temp;
+}
+
+function indexOfLexicographicMinimum(P) {
+  let best = 0;
+
+  for (let i = 1; i < P.length; i++) {
+    if (P[i].x < P[best].x || (P[i].x === P[best].x && P[i].y < P[best].y)) {
+      best = i;
+    }
   }
 
-  if (n === 1) {
-    return [{ x: P[0].x, y: P[0].y }];
-  }
+  return best;
+}
 
-  const degree = P.length - 1;
-  const coefficients = [];
+function isBetween(A, B, C) {
+  if (Math.abs(cross(A, B, C)) > EPSILON) return false;
 
-  for (let i = 0; i <= degree; i++) {
-    coefficients.push(binomial(degree, i));
-  }
+  return (
+    C.x >= Math.min(A.x, B.x) - EPSILON &&
+    C.x <= Math.max(A.x, B.x) + EPSILON &&
+    C.y >= Math.min(A.y, B.y) - EPSILON &&
+    C.y <= Math.max(A.y, B.y) + EPSILON
+  );
+}
 
-  for (let j = 0; j < n; j++) {
-    const t = j / (n - 1);
-    const s = 1 - t;
-    let x = 0;
-    let y = 0;
+function chooseNextPoint(P, currentIndex, fixedCount) {
+  const current = P[currentIndex];
+  let best = -1;
 
-    for (let i = 0; i <= degree; i++) {
-      const weight = coefficients[i] * Math.pow(t, i) * Math.pow(s, degree - i);
-      x += weight * P[i].x;
-      y += weight * P[i].y;
+  function testCandidate(index) {
+    if (areSamePoint(current, P[index])) return;
+
+    if (best === -1) {
+      best = index;
+      return;
     }
 
-    curvePoints.push({ x: x, y: y });
+    const turn = cross(current, P[best], P[index]);
+
+    if (turn < -EPSILON || (Math.abs(turn) <= EPSILON && distanceSquared(current, P[index]) > distanceSquared(current, P[best]))) {
+      best = index;
+    }
   }
 
-  return curvePoints;
+  if (fixedCount > 0) {
+    testCandidate(0);
+  }
+
+  for (let i = fixedCount + 1; i < P.length; i++) {
+    testCandidate(i);
+  }
+
+  return best;
 }
 
-function drawPoint(ctx, point, radius, fill, stroke) {
+function moveCollinearPoints(P, currentIndex, endpoint, includeEndpoint) {
+  const current = P[currentIndex];
+  let hullEnd = currentIndex;
+
+  while (true) {
+    let nearest = -1;
+    let nearestDistance = Infinity;
+
+    for (let i = hullEnd + 1; i < P.length; i++) {
+      const distance = distanceSquared(current, P[i]);
+
+      if (distance > EPSILON && isBetween(current, endpoint, P[i]) && distance < nearestDistance) {
+        nearest = i;
+        nearestDistance = distance;
+      }
+    }
+
+    if (nearest === -1) break;
+    if (!includeEndpoint && areSamePoint(P[nearest], endpoint)) break;
+
+    hullEnd++;
+    swap(P, hullEnd, nearest);
+
+    if (includeEndpoint && areSamePoint(P[hullEnd], endpoint)) break;
+  }
+
+  return hullEnd;
+}
+
+function ConvexHull_GiftWrapping(P) {
+  if (P.length < 3) {
+    return { V: P };
+  }
+
+  swap(P, 0, indexOfLexicographicMinimum(P));
+
+  let hullEnd = 0;
+
+  while (hullEnd < P.length) {
+    const nextIndex = chooseNextPoint(P, hullEnd, hullEnd);
+
+    if (nextIndex === -1 || nextIndex === 0) {
+      hullEnd = moveCollinearPoints(P, hullEnd, P[0], false);
+      P.length = hullEnd + 1;
+      return { V: P };
+    }
+
+    const endpoint = P[nextIndex];
+    hullEnd = moveCollinearPoints(P, hullEnd, endpoint, true);
+  }
+
+  return { V: P };
+}
+
+function randomInteger(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generatePoints(canvas) {
+  const points = [];
+  const used = new Set();
+  const margin = 34;
+  const count = randomInteger(50, 100);
+
+  while (points.length < count) {
+    const x = randomInteger(margin, canvas.width - margin);
+    const y = randomInteger(margin, canvas.height - margin);
+    const key = x + "," + y;
+
+    if (!used.has(key)) {
+      used.add(key);
+      points.push({ x: x, y: y });
+    }
+  }
+
+  return points;
+}
+
+function drawPoint(ctx, point, radius, color) {
   ctx.beginPath();
   ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
-  ctx.fillStyle = fill;
+  ctx.fillStyle = color;
   ctx.fill();
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = 2;
-  ctx.stroke();
 }
 
-function drawPolyline(ctx, points, color, width) {
-  if (points.length < 2) return;
+function drawHull(ctx, hull) {
+  if (hull.length < 2) return;
 
   ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
+  ctx.moveTo(hull[0].x, hull[0].y);
 
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y);
+  for (let i = 1; i < hull.length; i++) {
+    ctx.lineTo(hull[i].x, hull[i].y);
   }
 
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
+  ctx.closePath();
+  ctx.fillStyle = "rgba(20, 108, 148, 0.11)";
+  ctx.fill();
+  ctx.strokeStyle = "#146c94";
+  ctx.lineWidth = 3;
   ctx.lineJoin = "round";
-  ctx.lineCap = "round";
   ctx.stroke();
 }
 
-function drawScene(ctx, controlPoints, curvePoints) {
+function drawScene(ctx, points, hull) {
   const canvas = ctx.canvas;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawPolyline(ctx, controlPoints, "#9aa7b4", 1.5);
-  drawPolyline(ctx, curvePoints, "#d12c4f", 3);
+  drawHull(ctx, hull);
 
-  for (let i = 0; i < curvePoints.length; i++) {
-    if (i % 8 === 0 || i === curvePoints.length - 1) {
-      drawPoint(ctx, curvePoints[i], 2.5, "#d12c4f", "#d12c4f");
-    }
+  for (const point of points) {
+    drawPoint(ctx, point, 4, "#26384f");
   }
 
-  for (let i = 0; i < controlPoints.length; i++) {
-    drawPoint(ctx, controlPoints[i], 7, "#1f6feb", "#ffffff");
-    ctx.fillStyle = "#25313f";
-    ctx.font = "13px Arial, Helvetica, sans-serif";
-    ctx.fillText("P" + i, controlPoints[i].x + 10, controlPoints[i].y - 10);
+  for (const point of hull) {
+    drawPoint(ctx, point, 7, "#d62828");
   }
 }
 
-function canvasPointFromEvent(canvas, event) {
-  const rect = canvas.getBoundingClientRect();
+function runDemo(canvas, ctx, statusElement) {
+  const points = generatePoints(canvas);
+  const hullInput = points.slice();
+  const hull = ConvexHull_GiftWrapping(hullInput).V;
 
-  return {
-    x: (event.clientX - rect.left) * canvas.width / rect.width,
-    y: (event.clientY - rect.top) * canvas.height / rect.height
-  };
+  drawScene(ctx, points, hull);
+  statusElement.textContent = "Broj tacaka: " + points.length + ". Broj tacaka na omotacu: " + hull.length + ".";
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { GenerateBezierCurvePoints };
+  module.exports = { ConvexHull_GiftWrapping };
 }
 
 if (typeof document !== "undefined") {
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const statusElement = document.getElementById("status");
-  const pointCountInput = document.getElementById("pointCount");
   const generateButton = document.getElementById("generateButton");
-  const clearButton = document.getElementById("clearButton");
-  const controlPoints = [];
-  let curvePoints = [];
-
-  function updateStatus() {
-    if (controlPoints.length < 2) {
-      statusElement.textContent = "Zadato je " + controlPoints.length + " upravljackih tacaka. Za krivu su potrebne barem 2.";
-    } else if (curvePoints.length === 0) {
-      statusElement.textContent = "Zadato je " + controlPoints.length + " upravljackih tacaka. Kliknite na dugme za generisanje.";
-    } else {
-      statusElement.textContent = "Generisana je Bezierova kriva sa " + curvePoints.length + " tacaka i " + controlPoints.length + " upravljackih tacaka.";
-    }
-  }
-
-  canvas.addEventListener("click", function(event) {
-    controlPoints.push(canvasPointFromEvent(canvas, event));
-    curvePoints = [];
-    drawScene(ctx, controlPoints, curvePoints);
-    updateStatus();
-  });
 
   generateButton.addEventListener("click", function() {
-    const pointCount = Math.max(2, Math.min(1000, Number(pointCountInput.value) || 100));
-    pointCountInput.value = pointCount;
-
-    if (controlPoints.length >= 2) {
-      curvePoints = GenerateBezierCurvePoints(controlPoints, pointCount);
-    }
-
-    drawScene(ctx, controlPoints, curvePoints);
-    updateStatus();
+    runDemo(canvas, ctx, statusElement);
   });
 
-  clearButton.addEventListener("click", function() {
-    controlPoints.length = 0;
-    curvePoints = [];
-    drawScene(ctx, controlPoints, curvePoints);
-    updateStatus();
-  });
-
-  drawScene(ctx, controlPoints, curvePoints);
-  updateStatus();
+  runDemo(canvas, ctx, statusElement);
 }
