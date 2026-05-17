@@ -1,7 +1,2 @@
 /node_modules
-/.idea
-/knjiga
-/todo
-.DS_Store
-*.log
-*.zip
+./.idea
