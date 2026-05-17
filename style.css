@@ -53,6 +53,13 @@ button {
   cursor: pointer;
 }
 
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 button:hover {
   background: #0f5675;
 }
@@ -82,6 +89,10 @@ canvas {
   }
 
   button {
+    width: 100%;
+  }
+
+  .actions {
     width: 100%;
   }
 }
